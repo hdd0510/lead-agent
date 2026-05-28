@@ -1,145 +1,181 @@
 'use client'
-
 import { useState, useEffect, useCallback } from 'react'
-import Link from 'next/link'
-import { RefreshCw, MessageCircle } from 'lucide-react'
-import { getLeads, resetDemo } from '@/lib/api'
-import type { Lead } from '@/lib/api'
-import LeadCard from '@/components/lead-card'
-import LeadDetail from '@/components/lead-detail'
+import {
+  Lead, Message,
+  getLeads, getLead, approveLead, rejectLead, sendDraft, resetDemo, seedDemo,
+} from '@/lib/api'
+import { LeadCard } from '@/components/lead-card'
+import { LeadDetail } from '@/components/lead-detail'
+import { Button } from '@/components/ui/button'
+import { Bot, RefreshCw, RotateCcw, Users } from 'lucide-react'
+import { toast } from 'sonner'
 
-// Sort leads: HOT → WARM → COLD → null, then by score desc
-function sortLeads(leads: Lead[]): Lead[] {
-  const labelOrder = { HOT: 0, WARM: 1, COLD: 2 }
-  return [...leads].sort((a, b) => {
-    const la = a.label ? labelOrder[a.label] : 3
-    const lb = b.label ? labelOrder[b.label] : 3
-    if (la !== lb) return la - lb
-    return (b.score ?? 0) - (a.score ?? 0)
-  })
+function GroupHeader({ label, count }: { label: string; count: number }) {
+  return (
+    <div className="flex items-center justify-between px-4 py-2 bg-muted/50">
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <span className="text-xs text-muted-foreground">{count}</span>
+    </div>
+  )
 }
 
 export default function DashboardPage() {
   const [leads, setLeads] = useState<Lead[]>([])
-  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [detail, setDetail] = useState<{ lead: Lead; messages: Message[] } | null>(null)
   const [resetting, setResetting] = useState(false)
 
   const fetchLeads = useCallback(async () => {
-    try {
-      const data = await getLeads()
-      setLeads(sortLeads(data))
-      setError(null)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load leads')
-    } finally {
-      setLoading(false)
-    }
+    try { setLeads(await getLeads()) } catch { /* silent */ }
+  }, [])
+
+  const fetchDetail = useCallback(async (id: string) => {
+    try { setDetail(await getLead(id)) } catch { /* silent */ }
   }, [])
 
   useEffect(() => {
     fetchLeads()
-    const interval = setInterval(fetchLeads, 5000)
-    return () => clearInterval(interval)
+    const t = setInterval(fetchLeads, 5000)
+    return () => clearInterval(t)
   }, [fetchLeads])
 
+  useEffect(() => {
+    if (!selectedId) return
+    fetchDetail(selectedId)
+    const t = setInterval(() => fetchDetail(selectedId), 5000)
+    return () => clearInterval(t)
+  }, [selectedId, fetchDetail])
+
   async function handleReset() {
-    if (!confirm('Reset all demo data?')) return
     setResetting(true)
     try {
       await resetDemo()
-      setSelectedLeadId(null)
+      await seedDemo()
       await fetchLeads()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to reset demo')
-    } finally {
-      setResetting(false)
-    }
+      setSelectedId(null)
+      setDetail(null)
+      toast.success('Demo reset — 3 scenarios restored')
+    } catch { toast.error('Reset failed') }
+    finally { setResetting(false) }
   }
 
+  async function handleApprove() {
+    if (!selectedId) return
+    await approveLead(selectedId)
+    await fetchDetail(selectedId)
+    await fetchLeads()
+    toast.success('Lead approved')
+  }
+
+  async function handleReject() {
+    if (!selectedId) return
+    await rejectLead(selectedId)
+    await fetchDetail(selectedId)
+    await fetchLeads()
+    toast.success('Lead rejected')
+  }
+
+  async function handleSendDraft(message: string) {
+    if (!selectedId) return
+    await sendDraft(selectedId, message)
+    await fetchDetail(selectedId)
+    await fetchLeads()
+    toast.success('Draft sent')
+  }
+
+  const hot = leads.filter(l => l.label === 'HOT').sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+  const warm = leads.filter(l => l.label === 'WARM').sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+  const cold = leads.filter(l => l.label === 'COLD').sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+  const active = leads.filter(l => !l.label)
+
   return (
-    <div className="flex h-screen bg-gray-50">
-      {/* Left sidebar — lead list */}
-      <aside className="w-80 shrink-0 flex flex-col border-r border-gray-200 bg-white">
-        {/* Sidebar header */}
-        <div className="px-4 py-4 border-b border-gray-200 flex items-center justify-between">
-          <div>
-            <Link href="/" className="flex items-center gap-2 mb-1">
-              <div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center">
-                <MessageCircle className="w-3.5 h-3.5 text-white" />
-              </div>
-              <span className="font-semibold text-gray-900 text-sm">LeadAgent</span>
-            </Link>
-            <p className="text-xs text-gray-500">
-              {leads.length} lead{leads.length !== 1 ? 's' : ''}
-            </p>
+    <div className="flex h-screen overflow-hidden bg-background">
+      {/* Sidebar */}
+      <aside className="w-72 flex-none border-r flex flex-col bg-sidebar">
+        <div className="px-4 py-4 border-b">
+          <div className="flex items-center gap-2 mb-3">
+            <Bot className="size-5 text-muted-foreground" />
+            <span className="font-semibold text-sm">Lead Agent</span>
+            <a href="/" className="ml-auto text-xs text-muted-foreground hover:text-foreground">
+              ← Site
+            </a>
           </div>
-          <button
-            onClick={handleReset}
-            disabled={resetting}
-            title="Reset Demo"
-            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-          >
-            <RefreshCw className={`w-4 h-4 ${resetting ? 'animate-spin' : ''}`} />
-          </button>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="flex-1 text-xs h-7"
+              onClick={fetchLeads}
+            >
+              <RefreshCw className="size-3" /> Refresh
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="flex-1 text-xs h-7"
+              onClick={handleReset}
+              disabled={resetting}
+            >
+              <RotateCcw className="size-3" /> {resetting ? 'Resetting...' : 'Reset Demo'}
+            </Button>
+          </div>
         </div>
 
-        {/* Lead list */}
         <div className="flex-1 overflow-y-auto">
-          {loading && leads.length === 0 && (
-            <div className="flex items-center justify-center py-12 text-gray-400 text-sm">
-              Loading leads...
+          {leads.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-40 text-muted-foreground text-sm gap-2">
+              <Users className="size-8 opacity-30" />
+              <p>No leads yet</p>
+              <Button size="sm" variant="ghost" className="text-xs" onClick={handleReset}>
+                Seed demo data
+              </Button>
             </div>
+          ) : (
+            <>
+              {hot.length > 0 && <GroupHeader label="🔴 Hot" count={hot.length} />}
+              {hot.map(l => (
+                <LeadCard key={l.id} lead={l} selected={selectedId === l.id} onClick={() => setSelectedId(l.id)} />
+              ))}
+              {warm.length > 0 && <GroupHeader label="🟡 Warm" count={warm.length} />}
+              {warm.map(l => (
+                <LeadCard key={l.id} lead={l} selected={selectedId === l.id} onClick={() => setSelectedId(l.id)} />
+              ))}
+              {cold.length > 0 && <GroupHeader label="🔵 Cold" count={cold.length} />}
+              {cold.map(l => (
+                <LeadCard key={l.id} lead={l} selected={selectedId === l.id} onClick={() => setSelectedId(l.id)} />
+              ))}
+              {active.length > 0 && <GroupHeader label="⏳ Qualifying" count={active.length} />}
+              {active.map(l => (
+                <LeadCard key={l.id} lead={l} selected={selectedId === l.id} onClick={() => setSelectedId(l.id)} />
+              ))}
+            </>
           )}
-          {!loading && leads.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-12 text-gray-400 text-sm text-center px-4">
-              <p>No leads yet.</p>
-              <p className="mt-1">Go to the listing page to start a conversation.</p>
-              <Link href="/" className="mt-3 text-blue-500 hover:underline text-xs">
-                View listings
-              </Link>
-            </div>
-          )}
-          {leads.map(lead => (
-            <LeadCard
-              key={lead.id}
-              lead={lead}
-              selected={lead.id === selectedLeadId}
-              onClick={() => setSelectedLeadId(lead.id)}
-            />
-          ))}
         </div>
 
-        {error && (
-          <div className="px-4 py-2 bg-red-50 border-t border-red-100">
-            <p className="text-xs text-red-600">{error}</p>
-          </div>
-        )}
-
-        {/* Nav links */}
-        <div className="px-4 py-3 border-t border-gray-200 flex gap-3">
-          <Link href="/" className="text-xs text-gray-500 hover:text-blue-600">Home</Link>
-          <Link href="/config" className="text-xs text-gray-500 hover:text-blue-600">Configure</Link>
+        <div className="border-t p-3 flex gap-2">
+          <a href="/config" className="flex-1">
+            <Button variant="ghost" size="sm" className="w-full text-xs">
+              Configure Rules
+            </Button>
+          </a>
         </div>
       </aside>
 
-      {/* Right panel — lead detail */}
-      <main className="flex-1 flex flex-col overflow-hidden">
-        {selectedLeadId ? (
-          <LeadDetail leadId={selectedLeadId} />
-        ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
-            <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mb-4">
-              <MessageCircle className="w-8 h-8 text-gray-300" />
-            </div>
-            <p className="text-sm font-medium">Select a lead to view details</p>
-            <p className="text-xs mt-1 text-gray-300">
-              {leads.length > 0
-                ? `${leads.length} lead${leads.length !== 1 ? 's' : ''} in the sidebar`
-                : 'No leads yet — start a conversation on the listing page'}
-            </p>
+      {/* Detail panel */}
+      <main className="flex-1 overflow-hidden">
+        {!selectedId || !detail ? (
+          <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3">
+            <Bot className="size-12 opacity-20" />
+            <p className="text-sm">Select a lead to view details</p>
           </div>
+        ) : (
+          <LeadDetail
+            lead={detail.lead}
+            messages={detail.messages}
+            onApprove={handleApprove}
+            onReject={handleReject}
+            onSendDraft={handleSendDraft}
+          />
         )}
       </main>
     </div>

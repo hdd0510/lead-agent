@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useEffect, useCallback, use } from 'react'
-import Link from 'next/link'
-import { ArrowLeft, ArrowRight } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Loader2 } from 'lucide-react'
 import { getLead, sendMessage } from '@/lib/api'
 import type { Message } from '@/lib/api'
-import ConversationView from '@/components/conversation-view'
+import { ConversationView } from '@/components/conversation-view'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 type Props = {
   params: Promise<{ leadId: string }>
@@ -55,11 +56,7 @@ export default function LeadChatPage({ params }: Props) {
     setError(null)
 
     try {
-      const res = await sendMessage({
-        message: userMsg.content,
-        channel,
-        lead_id: leadId,
-      })
+      const res = await sendMessage({ message: userMsg.content, channel, lead_id: leadId })
       const assistantMsg: Message = {
         id: crypto.randomUUID(),
         role: 'assistant',
@@ -69,7 +66,6 @@ export default function LeadChatPage({ params }: Props) {
       setMessages(prev => [...prev, assistantMsg])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send message')
-      // Remove optimistic user message on failure
       setMessages(prev => prev.filter(m => m.id !== userMsg.id))
     } finally {
       setSending(false)
@@ -77,67 +73,55 @@ export default function LeadChatPage({ params }: Props) {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
+    <div className="flex flex-col h-screen bg-background">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3">
-        <Link href="/" className="text-gray-400 hover:text-gray-600 transition-colors">
-          <ArrowLeft className="w-5 h-5" />
-        </Link>
+      <header className="border-b px-4 py-3 flex items-center gap-3">
+        <a href="/" className="text-muted-foreground hover:text-foreground transition-colors">
+          <ArrowLeft className="size-5" />
+        </a>
         <div className="flex-1 min-w-0">
-          <h1 className="text-sm font-semibold text-gray-900 truncate">Your Conversation</h1>
-          <p className="text-xs text-gray-500 truncate">Lead ID: {leadId}</p>
+          <h1 className="text-sm font-semibold truncate">Your Conversation</h1>
+          <p className="text-xs text-muted-foreground truncate">Lead ID: {leadId}</p>
         </div>
-        <Link
-          href="/dashboard"
-          className="text-xs text-blue-600 hover:underline shrink-0"
-        >
+        <a href="/dashboard" className="text-xs text-primary hover:underline shrink-0">
           Agent view
-        </Link>
+        </a>
       </header>
 
       {/* Loading */}
       {loading && (
-        <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
-          Loading conversation...
+        <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm gap-2">
+          <Loader2 className="size-4 animate-spin" /> Loading conversation...
         </div>
       )}
 
       {/* Conversation */}
       {!loading && (
-        <ConversationView
-          messages={messages}
-          className="flex-1 py-4"
-        />
+        <div className="flex-1 overflow-y-auto px-4 py-4">
+          <ConversationView messages={messages} />
+        </div>
       )}
 
       {/* Error */}
       {error && (
-        <div className="mx-4 mb-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-          <p className="text-xs text-red-600">{error}</p>
+        <div className="mx-4 mb-2 bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">
+          <p className="text-xs text-destructive">{error}</p>
         </div>
       )}
 
       {/* Input */}
-      <div className="bg-white border-t border-gray-200 px-4 py-3">
+      <div className="border-t px-4 py-3">
         <form onSubmit={handleSend} className="flex gap-2">
-          <input
+          <Input
             value={input}
             onChange={e => setInput(e.target.value)}
             placeholder="Type a message..."
             disabled={sending || loading}
-            className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:opacity-50"
+            className="flex-1"
           />
-          <button
-            type="submit"
-            disabled={sending || !input.trim() || loading}
-            className="px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors"
-          >
-            {sending ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <ArrowRight className="w-4 h-4" />
-            )}
-          </button>
+          <Button type="submit" size="icon" disabled={sending || !input.trim() || loading}>
+            {sending ? <Loader2 className="size-4 animate-spin" /> : <ArrowRight className="size-4" />}
+          </Button>
         </form>
       </div>
     </div>

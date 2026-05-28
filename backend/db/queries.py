@@ -149,11 +149,9 @@ async def get_listing(listing_id: str, db: AsyncSession) -> Optional[Listing]:
 
 
 async def get_all_leads(db: AsyncSession) -> list[Lead]:
-    """All non-active leads sorted HOT first then score desc."""
+    """All leads — scored first (HOT→WARM→COLD), then active (qualifying), sorted by score desc."""
     result = await db.execute(
-        select(Lead)
-        .where(Lead.status != "active")
-        .order_by(Lead.score.desc().nulls_last(), Lead.created_at.desc())
+        select(Lead).order_by(Lead.score.desc().nulls_last(), Lead.created_at.desc())
     )
     return list(result.scalars().all())
 

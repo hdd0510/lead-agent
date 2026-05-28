@@ -1,325 +1,243 @@
 'use client'
-
 import { useState } from 'react'
-import Link from 'next/link'
-import { MessageCircle, MapPin, BedDouble, Euro, ArrowRight } from 'lucide-react'
+import { Bot, Workflow, MapPin, Bed, Euro, ChevronRight, Send, Loader2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { sendMessage } from '@/lib/api'
-import type { Message } from '@/lib/api'
-import ConversationView from '@/components/conversation-view'
-
-// ── Static listing data (matches backend seed) ─────────────────────────────
+import { toast } from 'sonner'
 
 const LISTINGS = [
   {
-    id: 'listing-001',
+    id: 'le-marais-apt',
     title: 'Le Marais Apartment',
-    type: '2BR',
-    price: '€350,000',
-    location: 'Paris 3e',
-    highlight: 'Parking included',
-    gradient: 'from-rose-400 to-pink-600',
+    price: 350000,
+    bedrooms: 2,
+    area: 'Paris 3e',
+    description: '65m² apartment in Le Marais. Renovated kitchen, south-facing balcony, parking included.',
+    features: ['Parking included', 'South balcony', 'Renovated kitchen'],
+    gradient: 'from-amber-500 to-orange-600',
   },
   {
-    id: 'listing-002',
+    id: 'bastille-studio',
     title: 'Bastille Studio',
-    type: 'Studio',
-    price: '€180,000',
-    location: 'Paris 11e',
-    highlight: 'High ceilings',
-    gradient: 'from-violet-400 to-indigo-600',
+    price: 180000,
+    bedrooms: 0,
+    area: 'Paris 11e',
+    description: '28m² studio, 5 min from Bastille metro. High ceilings and exposed brick walls.',
+    features: ['High ceilings', 'Exposed brick', 'Metro nearby'],
+    gradient: 'from-blue-500 to-indigo-600',
   },
   {
-    id: 'listing-003',
+    id: 'republique-family',
     title: 'République Family Home',
-    type: '4BR',
-    price: '€650,000',
-    location: 'Paris 10e',
-    highlight: 'Private garden',
-    gradient: 'from-emerald-400 to-teal-600',
+    price: 650000,
+    bedrooms: 4,
+    area: 'Paris 10e',
+    description: '140m² townhouse with private garden near Place de la République.',
+    features: ['Private garden', '4 bedrooms', 'Cellar included'],
+    gradient: 'from-emerald-500 to-teal-600',
   },
-] as const
+]
 
-// ── Chat state per listing ─────────────────────────────────────────────────
+type Message = { role: 'user' | 'assistant'; content: string }
 
-type ChatState = {
-  leadId: string | null
-  messages: Message[]
-  inputValue: string
-  sending: boolean
-  error: string | null
-}
+function ListingCard({ listing }: { listing: typeof LISTINGS[0] }) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [leadId, setLeadId] = useState<string | null>(null)
+  const [messages, setMessages] = useState<Message[]>([])
+  const [input, setInput] = useState(`I'm interested in the ${listing.title}`)
+  const [loading, setLoading] = useState(false)
 
-const defaultChat = (): ChatState => ({
-  leadId: null,
-  messages: [],
-  inputValue: '',
-  sending: false,
-  error: null,
-})
-
-// ── Inline chat form ───────────────────────────────────────────────────────
-
-type ChatFormProps = {
-  listing: (typeof LISTINGS)[number]
-  name: string
-  email: string
-  onNameChange: (v: string) => void
-  onEmailChange: (v: string) => void
-  chat: ChatState
-  onChatChange: (c: ChatState | ((prev: ChatState) => ChatState)) => void
-}
-
-function ChatForm({ listing, name, email, onNameChange, onEmailChange, chat, onChatChange }: ChatFormProps) {
-  const isFirstMessage = chat.leadId === null
-
-  async function handleSend(e: React.FormEvent) {
-    e.preventDefault()
-    if (!chat.inputValue.trim() || chat.sending) return
-
-    const userMsg: Message = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: chat.inputValue,
-      timestamp: new Date().toISOString(),
+  async function handleSend() {
+    if (!input.trim() || loading) return
+    if (!leadId && (!name.trim() || !email.trim())) {
+      toast.error('Please enter your name and email first')
+      return
     }
-
-    onChatChange((prev) => ({
-      ...prev,
-      sending: true,
-      error: null,
-      messages: [...prev.messages, userMsg],
-      inputValue: '',
-    }))
-
+    const userMsg = input.trim()
+    setInput('')
+    setLoading(true)
+    setMessages(prev => [...prev, { role: 'user', content: userMsg }])
     try {
-      const payload = {
-        message: userMsg.content,
-        channel: 'web',
+      const res = await sendMessage({
+        message: userMsg,
+        channel: 'webform',
         listing_id: listing.id,
-        lead_id: chat.leadId ?? undefined,
-        ...(isFirstMessage && name ? { name } : {}),
-        ...(isFirstMessage && email ? { email } : {}),
-      }
-      const res = await sendMessage(payload)
-      const assistantMsg: Message = {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: res.reply,
-        timestamp: new Date().toISOString(),
-      }
-      onChatChange((prev) => ({
-        ...prev,
-        leadId: res.lead_id,
-        messages: [...prev.messages, assistantMsg],
-        sending: false,
-      }))
-    } catch (err) {
-      onChatChange((prev) => ({
-        ...prev,
-        sending: false,
-        error: err instanceof Error ? err.message : 'Failed to send message',
-      }))
+        name: name || undefined,
+        email: email || undefined,
+        lead_id: leadId || undefined,
+      })
+      setLeadId(res.lead_id)
+      setMessages(prev => [...prev, { role: 'assistant', content: res.reply }])
+    } catch {
+      toast.error('Failed to send message')
+      setMessages(prev => prev.slice(0, -1))
+      setInput(userMsg)
+    } finally {
+      setLoading(false)
     }
   }
 
   return (
-    <div className="mt-4 border-t border-gray-100 pt-4 space-y-3">
-      {isFirstMessage && (
-        <div className="grid grid-cols-2 gap-2">
-          <input
-            required
-            value={name}
-            onChange={e => onNameChange(e.target.value)}
-            placeholder="Your name *"
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-          />
-          <input
-            required
-            type="email"
-            value={email}
-            onChange={e => onEmailChange(e.target.value)}
-            placeholder="Email *"
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-          />
+    <Card className="flex flex-col overflow-hidden transition-shadow hover:shadow-md">
+      <div className={`h-40 bg-gradient-to-br ${listing.gradient} relative flex items-end p-4`}>
+        <div className="absolute inset-0 bg-black/20" />
+        <div className="relative">
+          <h3 className="text-white font-semibold text-lg leading-tight">{listing.title}</h3>
+          <div className="flex items-center gap-1 text-white/90 text-sm mt-0.5">
+            <MapPin className="size-3" />
+            <span>{listing.area}</span>
+          </div>
         </div>
-      )}
+      </div>
 
-      {chat.messages.length > 0 && (
-        <div className="rounded-lg border border-gray-100 bg-gray-50 overflow-hidden">
-          <ConversationView messages={chat.messages} className="max-h-64" />
+      <CardContent className="flex flex-col flex-1 gap-4 p-5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1 font-bold text-xl">
+            <Euro className="size-4 text-muted-foreground" />
+            {listing.price.toLocaleString()}
+          </div>
+          {listing.bedrooms > 0 && (
+            <div className="flex items-center gap-1 text-sm text-muted-foreground">
+              <Bed className="size-4" />
+              {listing.bedrooms} bed{listing.bedrooms > 1 ? 's' : ''}
+            </div>
+          )}
         </div>
-      )}
 
-      {chat.error && (
-        <p className="text-xs text-red-600 bg-red-50 rounded px-3 py-1.5">{chat.error}</p>
-      )}
+        <p className="text-sm text-muted-foreground leading-relaxed">{listing.description}</p>
 
-      <form onSubmit={handleSend} className="flex gap-2">
-        <input
-          value={chat.inputValue}
-          onChange={e => onChatChange({ ...chat, inputValue: e.target.value })}
-          placeholder={
-            isFirstMessage
-              ? `I'm interested in ${listing.title}`
-              : 'Continue the conversation...'
-          }
-          className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-          disabled={chat.sending}
-        />
-        <button
-          type="submit"
-          disabled={chat.sending || !chat.inputValue.trim()}
-          className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-        >
-          <ArrowRight className="w-4 h-4" />
-        </button>
-      </form>
+        <div className="flex flex-wrap gap-1.5">
+          {listing.features.map(f => (
+            <Badge key={f} variant="secondary" className="text-xs font-normal">{f}</Badge>
+          ))}
+        </div>
 
-      {chat.leadId && (
-        <p className="text-xs text-gray-400">
-          Lead ID: {chat.leadId} ·{' '}
-          <Link href="/dashboard" className="text-blue-500 hover:underline">
-            View in dashboard
-          </Link>
-        </p>
-      )}
-    </div>
+        {!open ? (
+          <Button onClick={() => setOpen(true)} className="mt-auto w-full" size="sm">
+            Inquire about this property <ChevronRight className="size-3" />
+          </Button>
+        ) : (
+          <div className="flex flex-col gap-3 mt-auto border-t pt-4">
+            {!leadId && (
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label htmlFor={`name-${listing.id}`} className="text-xs">Name *</Label>
+                  <Input
+                    id={`name-${listing.id}`}
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    placeholder="Jean-Pierre"
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor={`email-${listing.id}`} className="text-xs">Email *</Label>
+                  <Input
+                    id={`email-${listing.id}`}
+                    type="email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="jp@example.com"
+                    className="h-8 text-sm"
+                  />
+                </div>
+              </div>
+            )}
+
+            {messages.length > 0 && (
+              <div className="flex flex-col gap-2 max-h-48 overflow-y-auto text-sm">
+                {messages.map((m, i) => (
+                  <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`rounded-lg px-3 py-2 max-w-[85%] leading-snug ${m.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground border'}`}>
+                      {m.content}
+                    </div>
+                  </div>
+                ))}
+                {loading && (
+                  <div className="flex justify-start">
+                    <div className="bg-muted border rounded-lg px-3 py-2 flex items-center gap-2 text-muted-foreground text-xs">
+                      <Loader2 className="size-3 animate-spin" /> Thinking...
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <Textarea
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
+                rows={2}
+                placeholder="Type your message..."
+                className="text-sm resize-none"
+              />
+              <Button
+                size="icon"
+                onClick={handleSend}
+                disabled={loading || !input.trim()}
+                className="shrink-0 self-end"
+              >
+                {loading ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
-// ── Main page ──────────────────────────────────────────────────────────────
-
-export default function HomePage() {
-  const [openListing, setOpenListing] = useState<string | null>(null)
-  const [chats, setChats] = useState<Record<string, ChatState>>({})
-  const [names, setNames] = useState<Record<string, string>>({})
-  const [emails, setEmails] = useState<Record<string, string>>({})
-
-  function getChat(id: string): ChatState {
-    return chats[id] ?? defaultChat()
-  }
-
-  function setChat(id: string, updater: ChatState | ((prev: ChatState) => ChatState)) {
-    setChats(prev => ({
-      ...prev,
-      [id]: typeof updater === 'function' ? updater(prev[id] ?? defaultChat()) : updater,
-    }))
-  }
-
-  function toggleListing(id: string) {
-    setOpenListing(prev => (prev === id ? null : id))
-  }
-
+export default function Home() {
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Nav */}
-      <nav className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center">
-            <MessageCircle className="w-4 h-4 text-white" />
+    <main className="min-h-screen">
+      <div className="bg-primary text-primary-foreground py-16 px-8">
+        <div className="max-w-4xl mx-auto text-center">
+          <div className="flex items-center justify-center gap-3 mb-6">
+            <div className="p-2 bg-primary-foreground/10 rounded-lg">
+              <Bot className="size-8" />
+            </div>
+            <div className="p-2 bg-primary-foreground/10 rounded-lg">
+              <Workflow className="size-8" />
+            </div>
           </div>
-          <span className="font-semibold text-gray-900">LeadAgent</span>
+          <h1 className="text-4xl font-bold tracking-tight mb-4">Lead Agent</h1>
+          <p className="text-lg text-primary-foreground/70 max-w-2xl mx-auto">
+            AI-powered lead qualification for real estate agencies. Respond to every inquiry in seconds,
+            qualify leads automatically, and book viewings while you sleep.
+          </p>
         </div>
-        <div className="flex items-center gap-4">
-          <Link href="/dashboard" className="text-sm text-gray-600 hover:text-blue-600 transition-colors">
-            Agent Dashboard
-          </Link>
-          <Link
-            href="/config"
-            className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Configure AI
-          </Link>
-        </div>
-      </nav>
+      </div>
 
-      {/* Hero */}
-      <section className="text-center py-16 px-6">
-        <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 text-xs font-medium px-3 py-1 rounded-full mb-4">
-          <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
-          AI-Powered Demo
+      <div className="max-w-5xl mx-auto px-8 py-12">
+        <div className="mb-8">
+          <h2 className="text-2xl font-semibold tracking-tight">Featured Properties</h2>
+          <p className="text-muted-foreground mt-1">Select a property and chat with our AI assistant to get started.</p>
         </div>
-        <h1 className="text-4xl font-bold text-gray-900 mb-3">
-          AI-Powered Lead Qualification
-        </h1>
-        <p className="text-lg text-gray-600 max-w-xl mx-auto">
-          Chat with our AI agent to inquire about properties. Watch it qualify leads, detect intent, and autonomously book viewings.
-        </p>
-        <div className="mt-6 flex justify-center gap-3">
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm"
-          >
-            Agent Dashboard <ArrowRight className="w-4 h-4" />
-          </Link>
-          <Link
-            href="/config"
-            className="px-5 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium text-sm"
-          >
-            Configure Rules
-          </Link>
-        </div>
-      </section>
-
-      {/* Listing cards */}
-      <section className="max-w-6xl mx-auto px-6 pb-20">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">Available Properties</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {LISTINGS.map(listing => {
-            const isOpen = openListing === listing.id
-            const chat = getChat(listing.id)
-            return (
-              <div
-                key={listing.id}
-                className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col"
-              >
-                {/* Gradient placeholder image */}
-                <div className={`h-40 bg-gradient-to-br ${listing.gradient} flex items-end p-4`}>
-                  <span className="text-white text-xs font-medium bg-black/20 rounded-full px-2.5 py-1">
-                    {listing.highlight}
-                  </span>
-                </div>
-
-                {/* Details */}
-                <div className="p-5 flex-1 flex flex-col">
-                  <h3 className="font-semibold text-gray-900 text-lg">{listing.title}</h3>
-                  <div className="mt-2 flex flex-wrap gap-3 text-sm text-gray-600">
-                    <span className="flex items-center gap-1">
-                      <BedDouble className="w-4 h-4 text-gray-400" /> {listing.type}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Euro className="w-4 h-4 text-gray-400" /> {listing.price}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <MapPin className="w-4 h-4 text-gray-400" /> {listing.location}
-                    </span>
-                  </div>
-
-                  <button
-                    onClick={() => toggleListing(listing.id)}
-                    className="mt-4 w-full py-2 rounded-lg border border-blue-200 text-blue-600 text-sm font-medium hover:bg-blue-50 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <MessageCircle className="w-4 h-4" />
-                    {isOpen ? 'Close Chat' : 'Inquire'}
-                  </button>
-
-                  {isOpen && (
-                    <ChatForm
-                      listing={listing}
-                      name={names[listing.id] ?? ''}
-                      email={emails[listing.id] ?? ''}
-                      onNameChange={v => setNames(prev => ({ ...prev, [listing.id]: v }))}
-                      onEmailChange={v => setEmails(prev => ({ ...prev, [listing.id]: v }))}
-                      chat={chat}
-                      onChatChange={c => setChat(listing.id, c)}
-                    />
-                  )}
-                </div>
-              </div>
-            )
-          })}
+          {LISTINGS.map(l => <ListingCard key={l.id} listing={l} />)}
         </div>
-      </section>
-    </div>
+
+        <div className="mt-12 rounded-xl border bg-muted/40 p-8 text-center">
+          <h3 className="font-semibold text-lg mb-2">Are you a real estate agent?</h3>
+          <p className="text-muted-foreground text-sm mb-4">View your qualified leads dashboard and manage your pipeline.</p>
+          <div className="flex gap-3 justify-center">
+            <Button asChild variant="default">
+              <a href="/dashboard">Open Dashboard</a>
+            </Button>
+            <Button asChild variant="outline">
+              <a href="/config">Configure Rules</a>
+            </Button>
+          </div>
+        </div>
+      </div>
+    </main>
   )
 }

@@ -1,64 +1,36 @@
-'use client'
+import { Message } from '@/lib/api'
+import { Bot, User } from 'lucide-react'
 
-import { useEffect, useRef } from 'react'
-import { clsx } from 'clsx'
-import type { Message } from '@/lib/api'
-
-type Props = {
-  messages: Message[]
-  className?: string
-}
-
-function formatTime(ts: string) {
-  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-}
-
-export default function ConversationView({ messages, className }: Props) {
-  const bottomRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages.length])
-
+export function ConversationView({ messages }: { messages: Message[] }) {
   if (messages.length === 0) {
     return (
-      <div className={clsx('flex items-center justify-center text-gray-400 text-sm', className)}>
-        No messages yet
-      </div>
+      <p className="text-sm text-muted-foreground italic text-center py-4">No messages yet.</p>
     )
   }
-
   return (
-    <div className={clsx('flex flex-col gap-3 overflow-y-auto px-4 py-3', className)}>
-      {messages.map((msg) => {
-        const isUser = msg.role === 'user'
-        return (
+    <div className="flex flex-col gap-3">
+      {messages.map((m, i) => (
+        <div key={i} className={`flex gap-2.5 ${m.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
           <div
-            key={msg.id}
-            className={clsx('flex', isUser ? 'justify-end' : 'justify-start')}
+            className={`size-6 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
+              m.role === 'user'
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted border'
+            }`}
           >
-            <div
-              className={clsx(
-                'max-w-[75%] rounded-2xl px-4 py-2.5 text-sm',
-                isUser
-                  ? 'bg-gray-200 text-gray-800 rounded-tr-sm'
-                  : 'bg-white border border-gray-200 text-gray-800 rounded-tl-sm shadow-sm'
-              )}
-            >
-              <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
-              <p
-                className={clsx(
-                  'text-xs mt-1',
-                  isUser ? 'text-gray-500 text-right' : 'text-gray-400'
-                )}
-              >
-                {formatTime(msg.timestamp)}
-              </p>
-            </div>
+            {m.role === 'user' ? <User className="size-3" /> : <Bot className="size-3" />}
           </div>
-        )
-      })}
-      <div ref={bottomRef} />
+          <div
+            className={`rounded-xl px-3.5 py-2.5 text-sm max-w-[80%] leading-relaxed whitespace-pre-wrap ${
+              m.role === 'user'
+                ? 'bg-primary text-primary-foreground rounded-tr-sm'
+                : 'bg-muted border rounded-tl-sm'
+            }`}
+          >
+            {m.content}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
