@@ -24,6 +24,7 @@ async def get_lead(lead_id: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail=f"Lead {lead_id} not found")
 
     messages = await get_lead_messages(lead_id, db)
-    detail = LeadDetail.model_validate(lead)
-    detail.messages = [MessageOut.model_validate(m) for m in messages]
-    return detail
+    # Build dict from column values only to avoid lazy-loading lead.messages relationship
+    lead_data = {k: v for k, v in lead.__dict__.items() if not k.startswith('_')}
+    lead_data['messages'] = [MessageOut.model_validate(m) for m in messages]
+    return LeadDetail.model_validate(lead_data)

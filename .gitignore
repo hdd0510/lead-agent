@@ -104,3 +104,7 @@ worktrees/
 
 # Generated OpenCode backup from scripts/generate-opencode.py --force
 .opencode.backup/
+
+# Claude/AI config files
+CLAUDE.md
+AGENTS.md

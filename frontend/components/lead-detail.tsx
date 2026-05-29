@@ -1,14 +1,15 @@
 'use client'
-import { useState } from 'react'
-import { Lead, Message } from '@/lib/api'
+import { useState, useEffect } from 'react'
+import { Lead, Message, sendMessage } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { ConversationView } from '@/components/conversation-view'
 import { CriteriaChecklist } from '@/components/criteria-checklist'
 import { cn } from '@/lib/utils'
-import { Check, X, Send, AlertTriangle, Calendar, MessageSquare } from 'lucide-react'
+import { Check, X, Send, AlertTriangle, Calendar, MessageSquare, Loader2 } from 'lucide-react'
 
 function labelVariant(label: string | null): 'hot' | 'warm' | 'cold' | 'secondary' {
   if (label === 'HOT') return 'hot'
@@ -38,6 +39,30 @@ export function LeadDetail({
 }) {
   const [draft, setDraft] = useState(lead.draft_reply ?? '')
   const [loading, setLoading] = useState(false)
+  const [chatInput, setChatInput] = useState('')
+  const [chatSending, setChatSending] = useState(false)
+  const [localMessages, setLocalMessages] = useState<Message[]>(messages)
+
+  // Sync when parent polling brings new messages
+  useEffect(() => { setLocalMessages(messages) }, [messages])
+
+  async function handleChat() {
+    const text = chatInput.trim()
+    if (!text || chatSending) return
+    setChatInput('')
+    setChatSending(true)
+    const tempMsg: Message = { id: crypto.randomUUID(), role: 'user', content: text, timestamp: new Date().toISOString() }
+    setLocalMessages(prev => [...prev, tempMsg])
+    try {
+      const res = await sendMessage({ message: text, channel: lead.channel, lead_id: lead.id })
+      const aiMsg: Message = { id: crypto.randomUUID(), role: 'assistant', content: res.reply, timestamp: new Date().toISOString() }
+      setLocalMessages(prev => [...prev, aiMsg])
+    } catch {
+      setLocalMessages(prev => prev.filter(m => m.id !== tempMsg.id))
+    } finally {
+      setChatSending(false)
+    }
+  }
 
   async function handle(fn: () => Promise<void>) {
     setLoading(true)
@@ -134,7 +159,21 @@ export function LeadDetail({
             <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-3 flex items-center gap-1">
               <MessageSquare className="size-3" /> Conversation
             </h3>
-            <ConversationView messages={messages} />
+            <ConversationView messages={localMessages} />
+            {/* Chat input — lets agent send messages directly */}
+            <div className="flex gap-2 mt-3">
+              <Input
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleChat() } }}
+                placeholder="Send a message as the lead..."
+                className="text-sm"
+                disabled={chatSending}
+              />
+              <Button size="icon-sm" onClick={handleChat} disabled={chatSending || !chatInput.trim()}>
+                {chatSending ? <Loader2 className="size-3 animate-spin" /> : <Send className="size-3" />}
+              </Button>
+            </div>
           </div>
         </div>
       </div>

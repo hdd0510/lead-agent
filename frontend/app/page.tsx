@@ -4,9 +4,9 @@ import { Bot, Workflow, MapPin, Bed, Euro, ChevronRight, Send, Loader2 } from 'l
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Field, FieldLabel, FieldGroup, FieldSet, FieldLegend } from '@/components/ui/field'
 import { sendMessage } from '@/lib/api'
 import { toast } from 'sonner'
 
@@ -86,20 +86,20 @@ function ListingCard({ listing }: { listing: typeof LISTINGS[0] }) {
 
   return (
     <Card className="flex flex-col overflow-hidden transition-shadow hover:shadow-md">
-      <div className={`h-40 bg-gradient-to-br ${listing.gradient} relative flex items-end p-4`}>
+      <div className={`h-36 bg-gradient-to-br ${listing.gradient} relative flex items-end p-4`}>
         <div className="absolute inset-0 bg-black/20" />
         <div className="relative">
-          <h3 className="text-white font-semibold text-lg leading-tight">{listing.title}</h3>
-          <div className="flex items-center gap-1 text-white/90 text-sm mt-0.5">
+          <h3 className="text-white font-semibold text-base leading-tight">{listing.title}</h3>
+          <div className="flex items-center gap-1 text-white/80 text-xs mt-0.5">
             <MapPin className="size-3" />
             <span>{listing.area}</span>
           </div>
         </div>
       </div>
 
-      <CardContent className="flex flex-col flex-1 gap-4 p-5">
+      <CardContent className="flex flex-col flex-1 gap-3 p-5">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1 font-bold text-xl">
+          <div className="flex items-center gap-1 font-bold text-lg">
             <Euro className="size-4 text-muted-foreground" />
             {listing.price.toLocaleString()}
           </div>
@@ -120,35 +120,38 @@ function ListingCard({ listing }: { listing: typeof LISTINGS[0] }) {
         </div>
 
         {!open ? (
-          <Button onClick={() => setOpen(true)} className="mt-auto w-full" size="sm">
+          <Button onClick={() => setOpen(true)} variant="outline" className="mt-auto w-full" size="sm">
             Inquire about this property <ChevronRight className="size-3" />
           </Button>
         ) : (
           <div className="flex flex-col gap-3 mt-auto border-t pt-4">
             {!leadId && (
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <Label htmlFor={`name-${listing.id}`} className="text-xs">Name *</Label>
-                  <Input
-                    id={`name-${listing.id}`}
-                    value={name}
-                    onChange={e => setName(e.target.value)}
-                    placeholder="Jean-Pierre"
-                    className="h-8 text-sm"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor={`email-${listing.id}`} className="text-xs">Email *</Label>
-                  <Input
-                    id={`email-${listing.id}`}
-                    type="email"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    placeholder="jp@example.com"
-                    className="h-8 text-sm"
-                  />
-                </div>
-              </div>
+              <FieldSet>
+                <FieldLegend variant="label">Contact Info</FieldLegend>
+                <FieldGroup className="gap-3">
+                  <Field>
+                    <FieldLabel htmlFor={`name-${listing.id}`}>Name *</FieldLabel>
+                    <Input
+                      id={`name-${listing.id}`}
+                      value={name}
+                      onChange={e => setName(e.target.value)}
+                      placeholder="Jean-Pierre"
+                      className="h-8 text-sm"
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor={`email-${listing.id}`}>Email *</FieldLabel>
+                    <Input
+                      id={`email-${listing.id}`}
+                      type="email"
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                      placeholder="jp@example.com"
+                      className="h-8 text-sm"
+                    />
+                  </Field>
+                </FieldGroup>
+              </FieldSet>
             )}
 
             {messages.length > 0 && (
@@ -197,36 +200,29 @@ function ListingCard({ listing }: { listing: typeof LISTINGS[0] }) {
 
 export default function Home() {
   return (
-    <main className="min-h-screen">
-      <div className="bg-primary text-primary-foreground py-16 px-8">
-        <div className="max-w-4xl mx-auto text-center">
-          <div className="flex items-center justify-center gap-3 mb-6">
-            <div className="p-2 bg-primary-foreground/10 rounded-lg">
-              <Bot className="size-8" />
-            </div>
-            <div className="p-2 bg-primary-foreground/10 rounded-lg">
-              <Workflow className="size-8" />
-            </div>
-          </div>
-          <h1 className="text-4xl font-bold tracking-tight mb-4">Lead Agent</h1>
-          <p className="text-lg text-primary-foreground/70 max-w-2xl mx-auto">
-            AI-powered lead qualification for real estate agencies. Respond to every inquiry in seconds,
-            qualify leads automatically, and book viewings while you sleep.
-          </p>
+    <main className="min-h-screen p-8">
+      <div className="flex items-center justify-center gap-2 mb-2">
+        <h1 className="text-2xl font-bold text-center">Lead Agent</h1>
+        <div className="flex items-center justify-center">
+          <Bot className="size-5" />
+          <Workflow className="size-5" />
         </div>
       </div>
+      <p className="text-center text-muted-foreground text-sm mb-10 max-w-md mx-auto">
+        AI-powered lead qualification for real estate agencies. Respond to every inquiry in seconds.
+      </p>
 
-      <div className="max-w-5xl mx-auto px-8 py-12">
-        <div className="mb-8">
-          <h2 className="text-2xl font-semibold tracking-tight">Featured Properties</h2>
-          <p className="text-muted-foreground mt-1">Select a property and chat with our AI assistant to get started.</p>
+      <div className="max-w-5xl mx-auto">
+        <div className="mb-6">
+          <h2 className="text-lg font-semibold tracking-tight">Featured Properties</h2>
+          <p className="text-muted-foreground text-sm mt-0.5">Select a property and chat with our AI assistant to get started.</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {LISTINGS.map(l => <ListingCard key={l.id} listing={l} />)}
         </div>
 
         <div className="mt-12 rounded-xl border bg-muted/40 p-8 text-center">
-          <h3 className="font-semibold text-lg mb-2">Are you a real estate agent?</h3>
+          <h3 className="font-semibold text-base mb-1">Are you a real estate agent?</h3>
           <p className="text-muted-foreground text-sm mb-4">View your qualified leads dashboard and manage your pipeline.</p>
           <div className="flex gap-3 justify-center">
             <Button asChild variant="default">

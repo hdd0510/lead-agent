@@ -88,6 +88,35 @@ NEXT_PUBLIC_DEMO_MODE=true
 | Marie Dubois | Draft waiting | WARM 62/100 | Rule handoff |
 | Thomas Bernard | Active (2/4) | — | Live qualification |
 
+## Docker (all-in-one)
+
+Requires Docker and Docker Compose. Set `OPENAI_API_KEY` (chat/scoring need a real key).
+
+```bash
+# From repo root — uses env var or placeholder in compose
+export OPENAI_API_KEY=sk-your-key-here
+docker compose up --build -d
+
+# Or with env file
+cp env.docker.example env.docker
+# edit env.docker, then:
+docker compose --env-file env.docker up --build -d
+```
+
+| Service   | URL |
+|-----------|-----|
+| Frontend  | http://localhost:3010 (override with `FRONTEND_PORT`) |
+| Backend   | http://localhost:8000 |
+| API docs  | http://localhost:8000/docs |
+
+Postgres runs inside Compose (`postgres:5432`). Demo data is seeded automatically on backend startup.
+
+```bash
+docker compose logs -f
+docker compose down        # stop
+docker compose down -v     # stop + delete DB volume
+```
+
 ## Deployment
 
 - **Backend**: Railway or Render (Python runtime)
