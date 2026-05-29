@@ -4,11 +4,15 @@ import logging
 from openai import AsyncOpenAI, APIError, RateLimitError
 from pydantic import BaseModel
 
-from config import settings
+from config import get_llm_config
 from db.models import Lead, Message
 
 logger = logging.getLogger(__name__)
-client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+
+
+def _get_client() -> tuple[AsyncOpenAI, str]:
+    cfg = get_llm_config()
+    return AsyncOpenAI(api_key=cfg["api_key"], base_url=cfg["base_url"] or None), cfg["model"]
 
 _MAX_RETRIES = 3
 _RETRY_BASE_DELAY = 1.0
@@ -47,10 +51,11 @@ async def score_lead(lead: Lead, messages: list[Message]) -> LeadScore:
         f"Conversation:\n{conversation}"
     )
 
+    client, model = _get_client()
     for attempt in range(_MAX_RETRIES):
         try:
             response = await client.beta.chat.completions.parse(
-                model=settings.OPENAI_MODEL,
+                model=model,
                 messages=[
                     {"role": "system", "content": _SCORING_PROMPT},
                     {"role": "user", "content": user_content},

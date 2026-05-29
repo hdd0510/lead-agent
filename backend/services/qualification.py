@@ -53,9 +53,10 @@ async def handle_escalation(
     """
     try:
         from openai import AsyncOpenAI
-        from config import settings
+        from config import get_llm_config
 
-        client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        cfg = get_llm_config()
+        client = AsyncOpenAI(api_key=cfg["api_key"], base_url=cfg["base_url"] or None)
         _, messages = await get_lead_with_messages(lead.id, db)
 
         conversation = "\n".join(f"{m.role.upper()}: {m.content}" for m in messages[-6:])
@@ -69,7 +70,7 @@ async def handle_escalation(
         )
 
         response = await client.chat.completions.create(
-            model=settings.OPENAI_MODEL,
+            model=cfg["model"],
             messages=[{"role": "user", "content": prompt}],
             temperature=0.6,
             max_tokens=200,

@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from db.database import create_tables
-from api import health, chat, leads, rules, actions, email_webhook, demo
+from api import health, chat, leads, rules, actions, email_webhook, demo, llm_config
 
 logging.basicConfig(
     level=logging.INFO,
@@ -42,3 +42,4 @@ app.include_router(rules.router)
 app.include_router(actions.router)
 app.include_router(email_webhook.router)
 app.include_router(demo.router)
+app.include_router(llm_config.router)

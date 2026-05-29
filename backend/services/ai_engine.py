@@ -1,16 +1,21 @@
-"""Core AI engine: process_turn() calls GPT-4o with structured outputs."""
+"""Core AI engine: process_turn() calls LLM with structured outputs (OpenAI-compatible)."""
 import asyncio
 import logging
 from typing import Optional
 from openai import AsyncOpenAI, APIError, RateLimitError
 from pydantic import BaseModel
 
-from config import settings
+from config import get_llm_config
 from db.models import Lead, Message, Rule, Listing
 
 logger = logging.getLogger(__name__)
 
-client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+
+def _get_client() -> tuple[AsyncOpenAI, str]:
+    """Build AsyncOpenAI client from current runtime config. Returns (client, model)."""
+    cfg = get_llm_config()
+    client = AsyncOpenAI(api_key=cfg["api_key"], base_url=cfg["base_url"] or None)
+    return client, cfg["model"]
 
 _MAX_RETRIES = 3
 _RETRY_BASE_DELAY = 1.0  # seconds, doubles each retry
@@ -65,10 +70,11 @@ async def process_turn(
     system_prompt = build_system_prompt(listing, rules)
     history = [{"role": m.role, "content": m.content} for m in messages]
 
+    client, model = _get_client()
     for attempt in range(_MAX_RETRIES):
         try:
             response = await client.beta.chat.completions.parse(
-                model=settings.OPENAI_MODEL,
+                model=model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     *history,

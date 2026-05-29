@@ -1,5 +1,6 @@
 // API client for AI Lead Qualification Agent backend
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
+// Uses /proxy/* which Next.js rewrites server-side → works regardless of how the user accesses the app
+const API_URL = '/proxy'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -93,7 +94,10 @@ export async function getLeads(): Promise<Lead[]> {
 }
 
 export async function getLead(leadId: string): Promise<{ lead: Lead; messages: Message[] }> {
-  return apiFetch(`/leads/${leadId}`)
+  // Backend returns a flat LeadDetail object with messages inside, not { lead, messages }
+  const data = await apiFetch<Lead & { messages: Message[] }>(`/leads/${leadId}`)
+  const { messages, ...lead } = data
+  return { lead: lead as Lead, messages }
 }
 
 export async function approveLead(leadId: string): Promise<void> {
@@ -149,6 +153,35 @@ export async function updateRule(id: string, data: Partial<Rule>): Promise<Rule>
 
 export async function deleteRule(id: string): Promise<void> {
   return apiFetch(`/rules/${id}`, { method: 'DELETE' })
+}
+
+// ── LLM Config ────────────────────────────────────────────────────────────
+
+export type LlmProvider = 'openai' | 'gemini' | 'custom'
+
+export type LlmConfig = {
+  provider: LlmProvider
+  api_key: string
+  model: string
+  base_url: string
+}
+
+export type LlmProviderInfo = {
+  id: string
+  base_url: string
+  default_model: string
+}
+
+export async function getLlmConfig(): Promise<LlmConfig> {
+  return apiFetch('/config/llm')
+}
+
+export async function updateLlmConfig(config: LlmConfig): Promise<LlmConfig> {
+  return apiFetch('/config/llm', { method: 'PUT', body: JSON.stringify(config) })
+}
+
+export async function getLlmProviders(): Promise<LlmProviderInfo[]> {
+  return apiFetch('/config/llm/providers')
 }
 
 // ── Demo ───────────────────────────────────────────────────────────────────

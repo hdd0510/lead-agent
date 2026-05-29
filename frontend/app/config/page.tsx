@@ -1,12 +1,12 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { Rule, getRules, createRule, updateRule, deleteRule, resetDemo, seedDemo } from '@/lib/api'
+import { Rule, getRules, createRule, updateRule, deleteRule, resetDemo, seedDemo, LlmConfig, LlmProviderInfo, getLlmConfig, updateLlmConfig, getLlmProviders } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { Bot, Plus, Trash2, ArrowLeft } from 'lucide-react'
+import { Bot, Plus, Trash2, ArrowLeft, Eye, EyeOff } from 'lucide-react'
 import { toast } from 'sonner'
 
 // ── Autonomy row — owns its own toggle state to avoid useState-in-map ────────
@@ -38,6 +38,139 @@ const AUTONOMY_ROWS: AutonomyRowProps[] = [
   { label: 'Investment leads', desc: 'Investment / rental property', defaultOn: false },
   { label: 'High-value leads (>€500k)', desc: 'Premium properties', defaultOn: true },
 ]
+
+// ── LLM Provider section ─────────────────────────────────────────────────────
+
+const PROVIDER_LABELS: Record<string, string> = {
+  openai: 'OpenAI',
+  gemini: 'Google Gemini',
+  custom: 'Custom',
+}
+
+function LlmProviderSection() {
+  const [cfg, setCfg] = useState<LlmConfig>({ provider: 'openai', api_key: '', model: '', base_url: '' })
+  const [providers, setProviders] = useState<LlmProviderInfo[]>([])
+  const [saving, setSaving] = useState(false)
+  const [showKey, setShowKey] = useState(false)
+  const [dirty, setDirty] = useState(false)
+
+  useEffect(() => {
+    getLlmConfig().then(setCfg).catch(() => {})
+    getLlmProviders().then(setProviders).catch(() => {})
+  }, [])
+
+  function handleProviderChange(id: string) {
+    const info = providers.find(p => p.id === id)
+    setCfg(prev => ({
+      ...prev,
+      provider: id as LlmConfig['provider'],
+      base_url: id === 'custom' ? prev.base_url : (info?.base_url ?? ''),
+      model: info?.default_model || prev.model,
+    }))
+    setDirty(true)
+  }
+
+  function update(field: keyof LlmConfig, value: string) {
+    setCfg(prev => ({ ...prev, [field]: value }))
+    setDirty(true)
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      await updateLlmConfig(cfg)
+      toast.success('LLM config saved')
+      setDirty(false)
+    } catch { toast.error('Failed to save LLM config') }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <section>
+      <div className="mb-4">
+        <h2 className="font-semibold text-lg">LLM Provider</h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          Choose the AI model provider for conversation processing.
+        </p>
+      </div>
+
+      <div className="rounded-lg border p-4 space-y-4 bg-muted/30">
+        {/* Provider selector */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium">Provider</label>
+          <div className="flex rounded-md border overflow-hidden text-xs font-medium w-fit">
+            {providers.map(p => (
+              <button
+                key={p.id}
+                onClick={() => handleProviderChange(p.id)}
+                className={`px-3 py-1.5 transition-colors border-l first:border-l-0 ${
+                  cfg.provider === p.id
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-background hover:bg-muted'
+                }`}
+              >
+                {PROVIDER_LABELS[p.id] ?? p.id}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Model name */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium">Model</label>
+          <Input
+            value={cfg.model}
+            onChange={e => update('model', e.target.value)}
+            placeholder="e.g. gpt-4o, gemini-2.0-flash"
+            className="text-sm max-w-sm"
+          />
+        </div>
+
+        {/* API Key */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium">API Key</label>
+          <div className="flex gap-2 max-w-sm">
+            <Input
+              type={showKey ? 'text' : 'password'}
+              value={cfg.api_key}
+              onChange={e => update('api_key', e.target.value)}
+              placeholder="sk-..."
+              className="text-sm font-mono"
+            />
+            <button
+              onClick={() => setShowKey(v => !v)}
+              className="px-2 text-muted-foreground hover:text-foreground transition-colors"
+              title={showKey ? 'Hide' : 'Show'}
+            >
+              {showKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+            </button>
+          </div>
+        </div>
+
+        {/* Base URL — always shown so user can verify / override */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium">
+            Base URL
+            {cfg.provider !== 'custom' && (
+              <span className="text-xs text-muted-foreground ml-2">(auto-filled)</span>
+            )}
+          </label>
+          <Input
+            value={cfg.base_url}
+            onChange={e => update('base_url', e.target.value)}
+            placeholder="https://api.openai.com/v1"
+            className="text-sm font-mono max-w-lg"
+            readOnly={cfg.provider !== 'custom'}
+          />
+        </div>
+
+        <Button size="sm" onClick={handleSave} disabled={saving || !dirty}>
+          {saving ? 'Saving…' : 'Save'}
+        </Button>
+      </div>
+    </section>
+  )
+}
 
 // ── Main page ────────────────────────────────────────────────────────────────
 
@@ -105,6 +238,11 @@ export default function ConfigPage() {
       </div>
 
       <div className="max-w-2xl mx-auto px-6 py-8 space-y-8">
+        {/* LLM Provider section */}
+        <LlmProviderSection />
+
+        <Separator />
+
         {/* Rules section */}
         <section>
           <div className="mb-4">
